@@ -1,20 +1,25 @@
 package dbutil
 
 import (
+	"database/sql"
 	"fmt"
+	//Import MSSQL driver
+	_ "github.com/denisenkom/go-mssqldb"
 )
 
-type Mssql struct {
-	InstanceName string
-	DatabaseName string
-	UserName     string
-	Password     string
+//MSSQL contains SQL Server connection related properties.
+type MSSQL struct {
+	connstr string
 }
 
-func (m *Mssql) TestConnectivity() {
-	fmt.Println("Testing MSSQL connectivity.")
+//NewMSSQL initializes a new instance of SQL Server connection.
+func NewMSSQL(InstanceName, Database, UserName, Password, AppName string) (db *MSSQL) {
+	db = new(MSSQL)
+	db.connstr = fmt.Sprintf("server=%s;database=%s;user id=%s;password=%s;app name=%s;", InstanceName, Database, UserName, Password, AppName)
+	return db
 }
 
-func (m *Mssql) ExecuteSql(Sql string) {
-	fmt.Println("Executing MSSQL query.")
+//Open opens a connection to the SQL Server.
+func (db *MSSQL) open() (conn *sql.DB, err error) {
+	return sql.Open("mssql", db.connstr)
 }

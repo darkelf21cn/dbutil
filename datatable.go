@@ -108,24 +108,24 @@ func (dt *DataTable) ContainsColumn(ColumnName string) (colIndex int, err error)
 }
 
 //AddColumn adds a new column to the datatable and set default values.
-func (dt *DataTable) AddColumn(c Column) (err error) {
+func (dt *DataTable) AddColumn(Column Column) (err error) {
 	//Check duplication
 	colCounts := len(dt.columns)
 	for i := 0; i < colCounts; i++ {
-		if dt.columns[i].Name() == c.Name() {
-			return fmt.Errorf("duplicate column: %s", c.Name())
+		if dt.columns[i].Name() == Column.Name() {
+			return fmt.Errorf("duplicate column: %s", Column.Name())
 		}
 	}
 
 	//Add column and set default value.
 	//Lock the datatable during the schema change.
 	dt.mutex.Lock()
-	dt.columns = append(dt.columns, c)
+	dt.columns = append(dt.columns, Column)
 	var v interface{}
-	if c.Nullable() {
+	if Column.Nullable() {
 		v = nil
 	} else {
-		switch golangTypeMapToSQL[c.DataType()] {
+		switch golangTypeMapToSQL[Column.DataType()] {
 		case "":
 			v = ""
 		case "bool":
@@ -208,7 +208,7 @@ func (dt *DataTable) GetCellValue(ColumnName string, RowID int) (value interface
 }
 
 //SetCellValue sets the value by given column name and row number
-func (dt *DataTable) SetCellValue(ColumnName string, RowID int, Value interface{}) (err error) {
+func (dt *DataTable) SetCellValue(ColumnName string, RowID int, Value sql.RawBytes) (err error) {
 	i, err := dt.ContainsColumn(ColumnName)
 	if err != nil {
 		return err
@@ -253,19 +253,20 @@ func (dt *DataTable) newEmptyRow() (rowptr []interface{}) {
 	for i := range values {
 		valuePtrs[i] = &values[i]
 	}
+
 	dt.data = append(dt.data, values)
 	return valuePtrs
 }
 
 //GenerateInsertCommands converts the data table into batched sql insert commands
-func (dt *DataTable) GenerateInsertCommands(tableName string, batchSize int) (commands []string, err error) {
-	if batchSize <= 0 {
+func (dt *DataTable) GenerateInsertCommands(TableName string, BatchSize int) (commands []string, err error) {
+	if BatchSize <= 0 {
 		return nil, fmt.Errorf("invalid batch size number")
 	}
 
 	cmds := make([]string, 0)
 	//Generate header
-	cmdHeader := fmt.Sprintf("INSERT INTO %s (", tableName)
+	cmdHeader := fmt.Sprintf("INSERT INTO %s (", TableName)
 	for _, col := range dt.columns {
 		cmdHeader += fmt.Sprintf("%s,", col.Name())
 	}
@@ -301,7 +302,7 @@ func (dt *DataTable) GenerateInsertCommands(tableName string, batchSize int) (co
 		cmd = strings.TrimRight(cmd, ", ")
 		cmd += "),\n"
 		curSize++
-		if curSize >= batchSize {
+		if curSize >= BatchSize {
 			cmd = strings.TrimRight(cmd, ",\n")
 			cmd = fmt.Sprintf("%s%s;", cmdHeader, cmd)
 			cmds = append(cmds, cmd)
@@ -327,10 +328,10 @@ func NewDataTable() *DataTable {
 }
 
 //FillDataTable converts the sql.Rows object into data table structure.
-func FillDataTable(rows *sql.Rows) (*DataTable, error) {
+func FillDataTable(Rows *sql.Rows) (*DataTable, error) {
 	dt := NewDataTable()
-	colName, _ := rows.Columns()
-	colTypes, _ := rows.ColumnTypes()
+	colName, _ := Rows.Columns()
+	colTypes, _ := Rows.ColumnTypes()
 	for i, col := range colTypes {
 		length, _ := col.Length()
 		decimalPrecision := int64(0)
@@ -342,11 +343,22 @@ func FillDataTable(rows *sql.Rows) (*DataTable, error) {
 		dt.AddColumn(*col)
 	}
 	rowid := 0
-	for rows.Next() {
+	for Rows.Next() {
 		valuePtrs := dt.newEmptyRow()
-		err := rows.Scan(valuePtrs...)
+		err := Rows.Scan(valuePtrs...)
 		if err != nil {
 			return nil, fmt.Errorf("error on filling row: %d\n%s", rowid, err.Error())
+		}
+		//Some of the driver returns everyting in []int8. Code below will do the conversion according to the column defination.
+		for i := range dt.columns {
+			if dt.data[rowid][i] != nil {
+				switch dt.data[rowid][i].(type) {
+				case []uint8:
+					dt.data[rowid][i] = string(dt.data[rowid][i].([]byte))
+				case time.Time:
+					dt.data[rowid][i] = dt.data[rowid][i].(time.Time).Format(timeLayout)
+				}
+			}
 		}
 		rowid++
 	}
