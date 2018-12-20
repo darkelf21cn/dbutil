@@ -7,21 +7,22 @@ import (
 	"time"
 )
 
+//DBInstance is an interface used for opening different databases
+type DBInstance interface {
+	open() (*sql.DB, error)
+}
+
 //DBMS is the abstraction struct of different database drivers.
 type DBMS struct {
 	retryIntervalSec int
 	maxRetries       int
 	conn             *sql.DB
 	ctx              context.Context
-	dbInstance       interface {
-		open() (*sql.DB, error)
-	}
+	dbInstance       DBInstance
 }
 
 //NewDBMS initializes the DBMS struct
-func NewDBMS(Ctx context.Context, RetryIntervalSec, MaxRetries int, DBInstance interface {
-	open() (*sql.DB, error)
-}) (db *DBMS) {
+func NewDBMS(Ctx context.Context, RetryIntervalSec, MaxRetries int, DBInstance DBInstance) (db *DBMS) {
 	db = new(DBMS)
 	db.dbInstance = DBInstance
 	db.ctx = Ctx
@@ -71,9 +72,10 @@ func (db *DBMS) Execute(SQL string) (err error) {
 //Query executes the sql query and fill the results into data table.
 func (db *DBMS) Query(SQL string) (dt *DataTable, err error) {
 	retries := 0
+	var stmt *sql.Stmt
 	var rows *sql.Rows
 	for retries <= db.maxRetries {
-		stmt, err := db.conn.PrepareContext(db.ctx, SQL)
+		stmt, err = db.conn.PrepareContext(db.ctx, SQL)
 		defer stmt.Close()
 		if err != nil {
 			retries++
@@ -96,4 +98,39 @@ func (db *DBMS) Query(SQL string) (dt *DataTable, err error) {
 		return nil, err
 	}
 	return dt, nil
+}
+
+//BulkCopy converts data table into batch of inserts. Then executes the insert commands.
+func (db *DBMS) BulkCopy(Data *DataTable, TableName string, BatchSize int, SingleTransaction bool) (msg string, err error) {
+	rowsInserted := int64(0)
+	cmds, err := Data.GenerateInsertCommands(TableName, BatchSize)
+	if err != nil {
+		return "", err
+	}
+	bcpStart := time.Now()
+	if SingleTransaction {
+		var tx *sql.Tx
+		tx, err = db.conn.BeginTx(db.ctx, nil)
+		defer tx.Rollback()
+		for _, cmd := range cmds {
+			r, err := tx.ExecContext(db.ctx, cmd)
+			if err != nil {
+				return "bulk copy failed", err
+			}
+			ra, _ := r.RowsAffected()
+			rowsInserted += ra
+		}
+		tx.Commit()
+	} else {
+		for _, cmd := range cmds {
+			r, err := db.conn.ExecContext(db.ctx, cmd)
+			if err != nil {
+				return fmt.Sprintf("bulk copy failed, %d rows copied without rollback", rowsInserted), err
+			}
+			ra, _ := r.RowsAffected()
+			rowsInserted += ra
+		}
+	}
+	copyRate := rowsInserted / int64(time.Since(bcpStart).Seconds())
+	return fmt.Sprintf("%d rows copied at %d rows/sec", rowsInserted, copyRate), nil
 }
