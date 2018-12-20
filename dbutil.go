@@ -103,7 +103,8 @@ func (db *DBMS) Query(SQL string) (dt *DataTable, err error) {
 //BulkCopy converts data table into batch of inserts. Then executes the insert commands.
 func (db *DBMS) BulkCopy(Data *DataTable, TableName string, BatchSize int, SingleTransaction bool) (msg string, err error) {
 	rowsInserted := int64(0)
-	cmds, err := Data.GenerateInsertCommands(TableName, BatchSize)
+	var cmds []string
+	cmds, err = Data.GenerateInsertCommands(TableName, BatchSize)
 	if err != nil {
 		return "", err
 	}
@@ -113,7 +114,8 @@ func (db *DBMS) BulkCopy(Data *DataTable, TableName string, BatchSize int, Singl
 		tx, err = db.conn.BeginTx(db.ctx, nil)
 		defer tx.Rollback()
 		for _, cmd := range cmds {
-			r, err := tx.ExecContext(db.ctx, cmd)
+			var r sql.Result
+			r, err = tx.ExecContext(db.ctx, cmd)
 			if err != nil {
 				return "bulk copy failed", err
 			}
@@ -123,7 +125,8 @@ func (db *DBMS) BulkCopy(Data *DataTable, TableName string, BatchSize int, Singl
 		tx.Commit()
 	} else {
 		for _, cmd := range cmds {
-			r, err := db.conn.ExecContext(db.ctx, cmd)
+			var r sql.Result
+			r, err = db.conn.ExecContext(db.ctx, cmd)
 			if err != nil {
 				return fmt.Sprintf("bulk copy failed, %d rows copied without rollback", rowsInserted), err
 			}
