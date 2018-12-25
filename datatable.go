@@ -14,7 +14,7 @@ const timeLayout = "2006-01-02 15:04:05"
 
 //Mapping SQL data type to golang data type.
 //Types not listed below will be converted to string.
-var golangTypeMapToSQL = map[string]string{
+var sql2golang = map[string]string{
 	"BIT":           "bool",
 	"TINYINT":       "int",
 	"SMALLINT":      "int",
@@ -126,7 +126,7 @@ func (dt *DataTable) AddColumn(Column Column) (err error) {
 	if Column.Nullable() {
 		v = nil
 	} else {
-		switch golangTypeMapToSQL[Column.DataType()] {
+		switch sql2golang[Column.DataType()] {
 		case "":
 			v = ""
 		case "bool":
@@ -162,7 +162,7 @@ func (dt *DataTable) AppendRow(Values ...interface{}) (err error) {
 		}
 		//Datatype validation
 		var ok bool
-		switch golangTypeMapToSQL[dt.columns[i].DataType()] {
+		switch sql2golang[dt.columns[i].DataType()] {
 		case "":
 			_, ok = v.(string)
 		case "bool":
@@ -171,7 +171,7 @@ func (dt *DataTable) AppendRow(Values ...interface{}) (err error) {
 			_, ok = v.(int)
 		case "int64":
 			_, ok = v.(int64)
-		case "float":
+		case "float64":
 			_, ok = v.(float64)
 		case "time.Time":
 			_, ok = v.(time.Time)
@@ -191,7 +191,8 @@ func (dt *DataTable) AppendRowFromString(Values ...string) (err error) {
 	}
 	row := make([]interface{}, 0)
 	for i, v := range Values {
-		switch golangTypeMapToSQL[dt.columns[i].DataType()] {
+		t := sql2golang[dt.columns[i].DataType()
+		switch t {
 		case "":
 			row = append(row, v)
 		case "bool":
@@ -214,7 +215,7 @@ func (dt *DataTable) AppendRowFromString(Values ...string) (err error) {
 				return fmt.Errorf("unable to convert %s to int64", v)
 			}
 			row = append(row, a)
-		case "float":
+		case "float64":
 			a, err := strconv.ParseFloat(v, 64)
 			if err != nil {
 				return fmt.Errorf("unable to convert %s to float64", v)
@@ -226,6 +227,8 @@ func (dt *DataTable) AppendRowFromString(Values ...string) (err error) {
 				return fmt.Errorf("unable to convert %s to time.Time", v)
 			}
 			row = append(row, a)
+		default:
+			return fmt.Errorf("no mapping for %s", t)
 		}
 	}
 	dt.data = append(dt.data, row)
@@ -265,7 +268,7 @@ func (dt *DataTable) SetCellValue(ColumnName string, RowID int, Value sql.RawByt
 	if RowID < 0 || RowID >= dt.RowCounts() {
 		return fmt.Errorf("given row number: %d does not exist in the data table", RowID)
 	}
-	expectedType, mapped := golangTypeMapToSQL[dt.columns[i].DataType()]
+	expectedType, mapped := sql2golang[dt.columns[i].DataType()]
 	if !mapped {
 		expectedType = "string"
 	}
