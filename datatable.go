@@ -135,7 +135,7 @@ func (dt *DataTable) AddColumn(Column Column) (err error) {
 			v = int(0)
 		case "int64":
 			v = int64(0)
-		case "float":
+		case "float64":
 			v = float64(0.0)
 		case "time.Time":
 			v, _ = time.Parse(timeLayout, "1900-01-01 00:00:00")
@@ -191,7 +191,7 @@ func (dt *DataTable) AppendRowFromString(Values ...string) (err error) {
 	}
 	row := make([]interface{}, 0)
 	for i, v := range Values {
-		t := sql2golang[dt.columns[i].DataType()
+		t := sql2golang[dt.columns[i].DataType()]
 		switch t {
 		case "":
 			row = append(row, v)
