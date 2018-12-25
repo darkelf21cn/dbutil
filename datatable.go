@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -163,23 +164,71 @@ func (dt *DataTable) AppendRow(Values ...interface{}) (err error) {
 		var ok bool
 		switch golangTypeMapToSQL[dt.columns[i].DataType()] {
 		case "":
-			_, ok = Values[i].(string)
+			_, ok = v.(string)
 		case "bool":
-			_, ok = Values[i].(bool)
+			_, ok = v.(bool)
 		case "int":
-			_, ok = Values[i].(int)
+			_, ok = v.(int)
 		case "int64":
-			_, ok = Values[i].(int64)
+			_, ok = v.(int64)
 		case "float":
-			_, ok = Values[i].(float64)
+			_, ok = v.(float64)
 		case "time.Time":
-			_, ok = Values[i].(time.Time)
+			_, ok = v.(time.Time)
 		}
 		if !ok {
 			return fmt.Errorf("data type does not match with column: %d", i)
 		}
 	}
 	dt.data = append(dt.data, Values)
+	return nil
+}
+
+//AppendRowFromString first converts the string value to target data type then append a new row to the data table.
+func (dt *DataTable) AppendRowFromString(Values ...string) (err error) {
+	if len(Values) != dt.ColumnCounts() {
+		return fmt.Errorf("column counts mismatch")
+	}
+	row := make([]interface{}, 0)
+	for i, v := range Values {
+		switch golangTypeMapToSQL[dt.columns[i].DataType()] {
+		case "":
+			row = append(row, v)
+		case "bool":
+			if strings.ToUpper(v) == "OK" || strings.ToUpper(v) == "TRUE" || v == "1" {
+				row = append(row, true)
+			} else if strings.ToUpper(v) == "FALSE" || v == "0" {
+				row = append(row, false)
+			} else {
+				return fmt.Errorf("unable to convert %s to bool", v)
+			}
+		case "int":
+			a, err := strconv.ParseInt(v, 10, 0)
+			if err != nil {
+				return fmt.Errorf("unable to convert %s to int", v)
+			}
+			row = append(row, int(a))
+		case "int64":
+			a, err := strconv.ParseInt(v, 10, 64)
+			if err != nil {
+				return fmt.Errorf("unable to convert %s to int64", v)
+			}
+			row = append(row, a)
+		case "float":
+			a, err := strconv.ParseFloat(v, 64)
+			if err != nil {
+				return fmt.Errorf("unable to convert %s to float64", v)
+			}
+			row = append(row, a)
+		case "time.Time":
+			a, err := time.Parse(timeLayout, v)
+			if err != nil {
+				return fmt.Errorf("unable to convert %s to time.Time", v)
+			}
+			row = append(row, a)
+		}
+	}
+	dt.data = append(dt.data, row)
 	return nil
 }
 
@@ -192,7 +241,7 @@ func (dt *DataTable) DeleteRow(RowID int) (err error) {
 	return nil
 }
 
-//GetCellValue returns the value by given column name and row number
+//GetCellValue returns the value by given column name and row number.
 func (dt *DataTable) GetCellValue(ColumnName string, RowID int) (value interface{}, isnull bool, err error) {
 	i, err := dt.ContainsColumn(ColumnName)
 	if err != nil {
