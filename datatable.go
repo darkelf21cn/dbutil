@@ -287,7 +287,7 @@ func (dt *DataTable) SetCellValue(ColumnName string, RowID int, Value sql.RawByt
 //Print prints the data table content to the console
 func (dt *DataTable) Print() {
 	for _, col := range dt.columns {
-		Printf("%s\t", col.Name())
+		fmt.Printf("%s\t", col.Name())
 	}
 	fmt.Println()
 	for _, row := range dt.data {
