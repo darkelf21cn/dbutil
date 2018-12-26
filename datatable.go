@@ -191,44 +191,48 @@ func (dt *DataTable) AppendRowFromString(Values ...string) (err error) {
 	}
 	row := make([]interface{}, 0)
 	for i, v := range Values {
-		t := sql2golang[dt.columns[i].DataType()]
-		switch t {
-		case "":
-			row = append(row, v)
-		case "bool":
-			if strings.ToUpper(v) == "OK" || strings.ToUpper(v) == "TRUE" || v == "1" {
-				row = append(row, true)
-			} else if strings.ToUpper(v) == "FALSE" || v == "0" {
-				row = append(row, false)
-			} else {
-				return fmt.Errorf("unable to convert %s to bool", v)
+		if v == "NULL" {
+			row = append(row, nil)
+		} else {
+			t := sql2golang[dt.columns[i].DataType()]
+			switch t {
+			case "":
+				row = append(row, v)
+			case "bool":
+				if strings.ToUpper(v) == "OK" || strings.ToUpper(v) == "TRUE" || v == "1" {
+					row = append(row, true)
+				} else if strings.ToUpper(v) == "FALSE" || v == "0" {
+					row = append(row, false)
+				} else {
+					return fmt.Errorf("unable to convert %s to bool", v)
+				}
+			case "int":
+				a, err := strconv.ParseInt(v, 10, 0)
+				if err != nil {
+					return fmt.Errorf("unable to convert %s to int", v)
+				}
+				row = append(row, int(a))
+			case "int64":
+				a, err := strconv.ParseInt(v, 10, 64)
+				if err != nil {
+					return fmt.Errorf("unable to convert %s to int64", v)
+				}
+				row = append(row, a)
+			case "float64":
+				a, err := strconv.ParseFloat(v, 64)
+				if err != nil {
+					return fmt.Errorf("unable to convert %s to float64", v)
+				}
+				row = append(row, a)
+			case "time.Time":
+				a, err := time.Parse(timeLayout, v)
+				if err != nil {
+					return fmt.Errorf("unable to convert %s to time.Time", v)
+				}
+				row = append(row, a)
+			default:
+				return fmt.Errorf("no mapping for %s", t)
 			}
-		case "int":
-			a, err := strconv.ParseInt(v, 10, 0)
-			if err != nil {
-				return fmt.Errorf("unable to convert %s to int", v)
-			}
-			row = append(row, int(a))
-		case "int64":
-			a, err := strconv.ParseInt(v, 10, 64)
-			if err != nil {
-				return fmt.Errorf("unable to convert %s to int64", v)
-			}
-			row = append(row, a)
-		case "float64":
-			a, err := strconv.ParseFloat(v, 64)
-			if err != nil {
-				return fmt.Errorf("unable to convert %s to float64", v)
-			}
-			row = append(row, a)
-		case "time.Time":
-			a, err := time.Parse(timeLayout, v)
-			if err != nil {
-				return fmt.Errorf("unable to convert %s to time.Time", v)
-			}
-			row = append(row, a)
-		default:
-			return fmt.Errorf("no mapping for %s", t)
 		}
 	}
 	dt.data = append(dt.data, row)
@@ -415,4 +419,8 @@ func FillDataTable(Rows *sql.Rows) (*DataTable, error) {
 		rowid++
 	}
 	return dt, nil
+}
+
+func (s *DataTable) AppendDataTable(t *DataTable) (err error) {
+	return nil
 }
