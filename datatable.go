@@ -425,6 +425,11 @@ func FillDataTable(Rows *sql.Rows) (*DataTable, error) {
 	return dt, nil
 }
 
-func (s *DataTable) AppendDataTable(t *DataTable) (err error) {
+//AppendDataTable appends one datatable into another
+func (dt *DataTable) AppendDataTable(NewDataTable *DataTable) (err error) {
+	if !reflect.DeepEqual(dt, NewDataTable) {
+		return fmt.Errorf("2 datatables should have the same structure")
+	}
+	dt.data = append(dt.data, NewDataTable.data...)
 	return nil
 }
