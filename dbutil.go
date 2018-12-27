@@ -38,8 +38,8 @@ func (db *DBMS) Open() (err error) {
 }
 
 //Close closes the database connection.
-func (db *DBMS) Close(conn *sql.DB) (err error) {
-	err = conn.Close()
+func (db *DBMS) Close() (err error) {
+	err = db.conn.Close()
 	if err != nil {
 		return err
 	}
