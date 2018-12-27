@@ -80,27 +80,28 @@ type DataTable struct {
 	columns  []Column
 	colIndex map[string]int
 	data     [][]interface{}
-	mutex    sync.Mutex
+	sync.RWMutex
 }
 
 //ColumnCounts returns the column counts of the data table.
 func (dt *DataTable) ColumnCounts() int {
+	dt.RLock()
+	defer dt.RUnlock()
 	return len(dt.columns)
 }
 
 //RowCounts returns the row counts of the data table.
 func (dt *DataTable) RowCounts() int {
-	var v int
-	if dt.ColumnCounts() == 0 {
-		v = 0
-	} else {
-		v = len(dt.data)
-	}
-	return v
+	dt.RLock()
+	defer dt.RUnlock()
+	return len(dt.data)
 }
 
 //ContainsColumn scans all the columns to check whether the given column exists in the data table.
 func (dt *DataTable) ContainsColumn(ColumnName string) (colIndex int, err error) {
+	//Grant read lock to prevent a concurrent schema change
+	dt.RLock()
+	defer dt.RUnlock()
 	i, ok := dt.colIndex[ColumnName]
 	if !ok {
 		return 0, fmt.Errorf("given column name: %s does not exist in the data table", ColumnName)
@@ -110,6 +111,10 @@ func (dt *DataTable) ContainsColumn(ColumnName string) (colIndex int, err error)
 
 //AddColumn adds a new column to the datatable and set default values.
 func (dt *DataTable) AddColumn(Column Column) (err error) {
+	//Lock the datatable during the schema change.
+	dt.Lock()
+	defer dt.Unlock()
+
 	//Check duplication
 	colCounts := len(dt.columns)
 	for i := 0; i < colCounts; i++ {
@@ -119,8 +124,6 @@ func (dt *DataTable) AddColumn(Column Column) (err error) {
 	}
 
 	//Add column and set default value.
-	//Lock the datatable during the schema change.
-	dt.mutex.Lock()
 	dt.columns = append(dt.columns, Column)
 	var v interface{}
 	if Column.Nullable() {
@@ -141,18 +144,19 @@ func (dt *DataTable) AddColumn(Column Column) (err error) {
 			v, _ = time.Parse(timeLayout, "1900-01-01 00:00:00")
 		}
 	}
-	rowCounts := dt.RowCounts()
+	rowCounts := len(dt.data)
 	for i := 0; i < rowCounts; i++ {
 		dt.data[i][colCounts] = v
 	}
 	dt.flushColumnIndex()
-	dt.mutex.Unlock()
 	return nil
 }
 
 //AppendRow appends a new row to the data table.
 func (dt *DataTable) AppendRow(Values ...interface{}) (err error) {
-	if len(Values) != dt.ColumnCounts() {
+	dt.Lock()
+	defer dt.Unlock()
+	if len(Values) != len(dt.columns) {
 		return fmt.Errorf("column counts mismatch")
 	}
 	for i, v := range Values {
@@ -186,7 +190,9 @@ func (dt *DataTable) AppendRow(Values ...interface{}) (err error) {
 
 //AppendRowFromString first converts the string value to target data type then append a new row to the data table.
 func (dt *DataTable) AppendRowFromString(Values ...string) (err error) {
-	if len(Values) != dt.ColumnCounts() {
+	dt.Lock()
+	defer dt.Unlock()
+	if len(Values) != len(dt.columns) {
 		return fmt.Errorf("column counts mismatch")
 	}
 	row := make([]interface{}, 0)
@@ -241,35 +247,49 @@ func (dt *DataTable) AppendRowFromString(Values ...string) (err error) {
 
 //DeleteRow removes the row at the given row index
 func (dt *DataTable) DeleteRow(RowID int) (err error) {
-	if RowID < 0 || RowID >= dt.RowCounts() {
+	dt.Lock()
+	defer dt.Unlock()
+	if RowID < 0 || RowID >= len(dt.data) {
 		return fmt.Errorf("invalid row id")
 	}
 	dt.data = append(dt.data[:RowID], dt.data[RowID+1:]...)
 	return nil
 }
 
-//GetCellValue returns the value by given column name and row number.
-func (dt *DataTable) GetCellValue(ColumnName string, RowID int) (value interface{}, isnull bool, err error) {
+//GetCell returns the value by given column name and row number.
+func (dt *DataTable) GetCell(ColumnName string, RowID int) (value interface{}, err error) {
+	dt.RLock()
+	defer dt.RUnlock()
 	i, err := dt.ContainsColumn(ColumnName)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
-	if RowID < 0 || RowID >= dt.RowCounts() {
-		return nil, false, fmt.Errorf("given row number: %d does not exist in the data table", RowID)
+	if RowID < 0 || RowID >= len(dt.data) {
+		return nil, fmt.Errorf("given row number: %d does not exist in the data table", RowID)
 	}
-	if dt.data[RowID][i] == nil {
-		return dt.data[RowID][i], true, nil
-	}
-	return dt.data[RowID][i], false, nil
+	return dt.data[RowID][i], nil
 }
 
-//SetCellValue sets the value by given column name and row number
-func (dt *DataTable) SetCellValue(ColumnName string, RowID int, Value sql.RawBytes) (err error) {
+//GetRow fetches the given id of the row and returns row with slice format.
+func (dt *DataTable) GetRow(RowID int) (row []interface{}, err error) {
+	dt.RLock()
+	defer dt.RUnlock()
+	if RowID < 0 || RowID >= len(dt.data) {
+		return nil, fmt.Errorf("given row number: %d does not exist in the data table", RowID)
+	}
+	return dt.data[RowID], nil
+}
+
+//SetCell sets the value by given column name and row number
+func (dt *DataTable) SetCell(ColumnName string, RowID int, Value sql.RawBytes) (err error) {
+	//Using RLock to prevent single cell update operation locks the entire table
+	dt.RLock()
+	defer dt.RUnlock()
 	i, err := dt.ContainsColumn(ColumnName)
 	if err != nil {
 		return err
 	}
-	if RowID < 0 || RowID >= dt.RowCounts() {
+	if RowID < 0 || RowID >= len(dt.data) {
 		return fmt.Errorf("given row number: %d does not exist in the data table", RowID)
 	}
 	expectedType, mapped := sql2golang[dt.columns[i].DataType()]
@@ -284,8 +304,21 @@ func (dt *DataTable) SetCellValue(ColumnName string, RowID int, Value sql.RawByt
 	return nil
 }
 
+//AppendDataTable appends one datatable into another
+func (dt *DataTable) AppendDataTable(NewDataTable *DataTable) (err error) {
+	dt.Lock()
+	defer dt.Unlock()
+	if !reflect.DeepEqual(dt, NewDataTable) {
+		return fmt.Errorf("2 datatables should have the same structure")
+	}
+	dt.data = append(dt.data, NewDataTable.data...)
+	return nil
+}
+
 //Print prints the data table content to the console
 func (dt *DataTable) Print() {
+	dt.RLock()
+	defer dt.RUnlock()
 	for _, col := range dt.columns {
 		fmt.Printf("%s\t", col.Name())
 	}
@@ -298,31 +331,15 @@ func (dt *DataTable) Print() {
 	}
 }
 
-func (dt *DataTable) flushColumnIndex() {
-	colIndex := make(map[string]int, 0)
-	for i, col := range dt.columns {
-		colIndex[col.Name()] = i
-	}
-	dt.colIndex = colIndex
-}
-
-func (dt *DataTable) newEmptyRow() (rowptr []interface{}) {
-	colCounts := dt.ColumnCounts()
-	values := make([]interface{}, colCounts)
-	valuePtrs := make([]interface{}, colCounts)
-	for i := range values {
-		valuePtrs[i] = &values[i]
-	}
-
-	dt.data = append(dt.data, values)
-	return valuePtrs
-}
-
 //GenerateInsertCommands converts the data table into batched sql insert commands
 func (dt *DataTable) GenerateInsertCommands(TableName string, BatchSize int) (commands []string, err error) {
 	if BatchSize <= 0 {
 		return nil, fmt.Errorf("invalid batch size number")
 	}
+
+	//Grant read lock
+	dt.RLock()
+	defer dt.RUnlock()
 
 	cmds := make([]string, 0)
 	//Generate header
@@ -378,6 +395,26 @@ func (dt *DataTable) GenerateInsertCommands(TableName string, BatchSize int) (co
 	return cmds, nil
 }
 
+func (dt *DataTable) flushColumnIndex() {
+	colIndex := make(map[string]int, 0)
+	for i, col := range dt.columns {
+		colIndex[col.Name()] = i
+	}
+	dt.colIndex = colIndex
+}
+
+func (dt *DataTable) newEmptyRow() (rowptr []interface{}) {
+	colCounts := len(dt.columns)
+	values := make([]interface{}, colCounts)
+	valuePtrs := make([]interface{}, colCounts)
+	for i := range values {
+		valuePtrs[i] = &values[i]
+	}
+
+	dt.data = append(dt.data, values)
+	return valuePtrs
+}
+
 //NewDataTable initializes a new data table object.
 func NewDataTable() *DataTable {
 	dt := new(DataTable)
@@ -423,13 +460,4 @@ func FillDataTable(Rows *sql.Rows) (*DataTable, error) {
 		rowid++
 	}
 	return dt, nil
-}
-
-//AppendDataTable appends one datatable into another
-func (dt *DataTable) AppendDataTable(NewDataTable *DataTable) (err error) {
-	if !reflect.DeepEqual(dt, NewDataTable) {
-		return fmt.Errorf("2 datatables should have the same structure")
-	}
-	dt.data = append(dt.data, NewDataTable.data...)
-	return nil
 }
