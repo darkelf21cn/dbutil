@@ -128,12 +128,18 @@ func (db *DBMS) BulkCopy(Data *DataTable, TableName string, BatchSize int, Singl
 			var r sql.Result
 			r, err = db.conn.ExecContext(db.ctx, cmd)
 			if err != nil {
-				return fmt.Sprintf("bulk copy failed, %d rows copied without rollback", rowsInserted), err
+				return fmt.Sprintf("bulk copy failed, %d rows copied without rollback\n", rowsInserted), err
 			}
 			ra, _ := r.RowsAffected()
 			rowsInserted += ra
 		}
 	}
-	copyRate := rowsInserted / int64(time.Since(bcpStart).Seconds())
-	return fmt.Sprintf("%d rows copied at %d rows/sec", rowsInserted, copyRate), nil
+	duration := int64(time.Since(bcpStart).Seconds())
+	var copyRate int64
+	if duration == 0 {
+		copyRate = rowsInserted
+	} else {
+		copyRate = rowsInserted / duration
+	}
+	return fmt.Sprintf("%d rows copied at %d rows/sec\n", rowsInserted, copyRate), nil
 }

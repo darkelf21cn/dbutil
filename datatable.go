@@ -16,11 +16,11 @@ const timeLayout = "2006-01-02 15:04:05"
 //Types not listed below will be converted to string.
 var sql2golang = map[string]string{
 	"BIT":           "bool",
-	"TINYINT":       "int",
-	"SMALLINT":      "int",
-	"MEDIUMINT":     "int",
-	"INT":           "int",
-	"INTEGER":       "int",
+	"TINYINT":       "int64",
+	"SMALLINT":      "int64",
+	"MEDIUMINT":     "int64",
+	"INT":           "int64",
+	"INTEGER":       "int64",
 	"BIGINT":        "int64",
 	"DECIMAL":       "float64",
 	"FLOAT":         "float64",
@@ -134,8 +134,6 @@ func (dt *DataTable) AddColumn(Column Column) (err error) {
 			v = ""
 		case "bool":
 			v = false
-		case "int":
-			v = int(0)
 		case "int64":
 			v = int64(0)
 		case "float64":
@@ -171,8 +169,6 @@ func (dt *DataTable) AppendRow(Values ...interface{}) (err error) {
 			_, ok = v.(string)
 		case "bool":
 			_, ok = v.(bool)
-		case "int":
-			_, ok = v.(int)
 		case "int64":
 			_, ok = v.(int64)
 		case "float64":
@@ -212,12 +208,6 @@ func (dt *DataTable) AppendRowFromString(Values ...string) (err error) {
 				} else {
 					return fmt.Errorf("unable to convert %s to bool", v)
 				}
-			case "int":
-				a, err := strconv.ParseInt(v, 10, 0)
-				if err != nil {
-					return fmt.Errorf("unable to convert %s to int", v)
-				}
-				row = append(row, int(a))
 			case "int64":
 				a, err := strconv.ParseInt(v, 10, 64)
 				if err != nil {
@@ -362,7 +352,7 @@ func (dt *DataTable) GenerateInsertCommands(TableName string, BatchSize int) (co
 			switch cell.(type) {
 			case string:
 				cmd += fmt.Sprintf("'%s', ", strings.Replace(cell.(string), "'", "''", -1))
-			case int, int64:
+			case int64:
 				cmd += fmt.Sprintf("%d, ", cell)
 			case float64:
 				cmd += fmt.Sprintf("%f, ", cell)
