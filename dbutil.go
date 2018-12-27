@@ -72,17 +72,9 @@ func (db *DBMS) Execute(SQL string) (err error) {
 //Query executes the sql query and fill the results into data table.
 func (db *DBMS) Query(SQL string) (dt *DataTable, err error) {
 	retries := 0
-	var stmt *sql.Stmt
 	var rows *sql.Rows
 	for retries <= db.maxRetries {
-		stmt, err = db.conn.PrepareContext(db.ctx, SQL)
-		defer stmt.Close()
-		if err != nil {
-			retries++
-			time.Sleep(time.Duration(db.maxRetries) * time.Millisecond)
-			continue
-		}
-		rows, err = stmt.QueryContext(db.ctx)
+		rows, err = db.query(SQL)
 		if err != nil {
 			retries++
 			time.Sleep(time.Duration(db.maxRetries) * time.Millisecond)
@@ -98,6 +90,20 @@ func (db *DBMS) Query(SQL string) (dt *DataTable, err error) {
 		return nil, err
 	}
 	return dt, nil
+}
+
+func (db *DBMS) query(SQL string) (rows *sql.Rows, err error) {
+	var stmt *sql.Stmt
+	stmt, err = db.conn.PrepareContext(db.ctx, SQL)
+	if err != nil {
+		return nil, err
+	}
+	defer stmt.Close()
+	rows, err = stmt.QueryContext(db.ctx)
+	if err != nil {
+		return nil, err
+	}
+	return rows, nil
 }
 
 //BulkCopy converts data table into batch of inserts. Then executes the insert commands.

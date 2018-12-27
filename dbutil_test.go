@@ -15,12 +15,11 @@ func Test_Query(t *testing.T) {
 	insMssql := NewMSSQL("NTGSQLMONITOR02", "Nova", "DashboardAcct", "G5agc#FdM$+R", "AutoPilot")
 	mssql := NewDBMS(ctx, 10, 2, insMssql)
 	err = mssql.Open()
-	defer mssql.Close()
 	if err != nil {
 		fmt.Printf("failed to open database:\n%s\n", err.Error())
 		return
 	}
-
+	defer mssql.Close()
 	dt, err = mssql.Query("SELECT * FROM sys.tables;")
 	if err != nil {
 		fmt.Printf("filed to run the sql query:\n%s\n", err.Error())
@@ -32,11 +31,11 @@ func Test_Query(t *testing.T) {
 	insMysql := NewMySQL("10.215.70.141", 3306, "nova", "kwang", "k!m!w@ngAP", "interpolateParams=true", "parseTime=true")
 	mysql := NewDBMS(context.Background(), 10, 2, insMysql)
 	err = mysql.Open()
-	defer mysql.Close()
 	if err != nil {
 		fmt.Printf("failed to open database:\n%s\n", err.Error())
 		return
 	}
+	defer mysql.Close()
 
 	dt, err = mysql.Query("SELECT * FROM mysql.user;")
 	if err != nil {
@@ -53,20 +52,20 @@ func Test_BlukCopy(t *testing.T) {
 	insMssql := NewMSSQL("NTGSQLMONITOR02", "MSSQLMonitoringDW", "DashboardAcct", "G5agc#FdM$+R", "AutoPilot")
 	mssql := NewDBMS(ctx, 10, 2, insMssql)
 	err = mssql.Open()
-	defer mssql.Close()
 	if err != nil {
 		fmt.Printf("failed to open database:\n%s\n", err.Error())
 		return
 	}
+	defer mssql.Close()
 
 	insMysql := NewMySQL("10.215.70.141", 3306, "nova", "kwang", "k!m!w@ngAP", "interpolateParams=true", "parseTime=true")
 	mysql := NewDBMS(context.Background(), 10, 2, insMysql)
 	err = mysql.Open()
-	defer mysql.Close()
 	if err != nil {
 		fmt.Printf("failed to open database:\n%s\n", err.Error())
 		return
 	}
+	defer mysql.Close()
 
 	dt, err = mssql.Query("SELECT TOP 100000 * FROM dbo.mConnectivityHist;")
 	if err != nil {
