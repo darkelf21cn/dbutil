@@ -315,7 +315,12 @@ func (dt *DataTable) Print() {
 	fmt.Println()
 	for _, row := range dt.data {
 		for _, cell := range row {
-			fmt.Printf("%v\t", cell)
+			switch cell.(type) {
+			case time.Time:
+				fmt.Printf("%s\t", cell.(time.Time).Format(timeLayout))
+			default:
+				fmt.Printf("%v\t", cell)
+			}
 		}
 		fmt.Println()
 	}
