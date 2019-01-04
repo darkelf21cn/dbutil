@@ -53,13 +53,13 @@ func (db *DBMS) Execute(SQL string) (err error) {
 		err = db.conn.PingContext(db.ctx)
 		if err != nil {
 			retries++
-			time.Sleep(time.Duration(db.maxRetries) * time.Millisecond)
+			time.Sleep(time.Duration(db.retryIntervalSec) * time.Second)
 			continue
 		}
 		_, err = db.conn.ExecContext(db.ctx, SQL)
 		if err != nil {
 			retries++
-			time.Sleep(time.Duration(db.maxRetries) * time.Millisecond)
+			time.Sleep(time.Duration(db.retryIntervalSec) * time.Second)
 			continue
 		}
 	}
@@ -77,7 +77,7 @@ func (db *DBMS) Query(SQL string) (dt *DataTable, err error) {
 		rows, err = db.query(SQL)
 		if err != nil {
 			retries++
-			time.Sleep(time.Duration(db.maxRetries) * time.Millisecond)
+			time.Sleep(time.Duration(db.retryIntervalSec) * time.Second)
 			continue
 		}
 		break
