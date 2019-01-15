@@ -46,19 +46,10 @@ func (db *DBMS) Close() (err error) {
 	return nil
 }
 
-//Execute executes the sql query with out results.
+//Execute executes the sql query without results.
 func (db *DBMS) Execute(SQL string) (err error) {
 	retries := 0
 	for retries <= db.maxRetries {
-		err = db.conn.PingContext(db.ctx)
-		if err != nil {
-			if db.ctx.Err() == context.Canceled {
-				return err
-			}
-			retries++
-			time.Sleep(time.Duration(db.retryIntervalSec) * time.Second)
-			continue
-		}
 		_, err = db.conn.ExecContext(db.ctx, SQL)
 		if err != nil {
 			if db.ctx.Err() == context.Canceled {
@@ -68,6 +59,51 @@ func (db *DBMS) Execute(SQL string) (err error) {
 			time.Sleep(time.Duration(db.retryIntervalSec) * time.Second)
 			continue
 		}
+		break
+	}
+	if retries > db.maxRetries {
+		return fmt.Errorf("execution failed after %d retries. the last error was:\n%s", db.maxRetries, err)
+	}
+	return nil
+}
+
+//ExecuteBatch executes the sql queries by sequence without results.
+func (db *DBMS) ExecuteBatch(SQLs []string, SingleTransaction bool) (err error) {
+	retries := 0
+	for retries <= db.maxRetries {
+		func() {
+			if SingleTransaction {
+				var tx *sql.Tx
+				tx, err = db.conn.BeginTx(db.ctx, nil)
+				if err != nil {
+					return
+				}
+				defer tx.Rollback()
+				for _, sql := range SQLs {
+					_, err = tx.ExecContext(db.ctx, sql)
+					if err != nil {
+						return
+					}
+				}
+				tx.Commit()
+			} else {
+				for _, sql := range SQLs {
+					_, err = db.conn.ExecContext(db.ctx, sql)
+					if err != nil {
+						return
+					}
+				}
+			}
+		}()
+		if err != nil {
+			if db.ctx.Err() == context.Canceled {
+				return err
+			}
+			retries++
+			time.Sleep(time.Duration(db.retryIntervalSec) * time.Second)
+			continue
+		}
+		break
 	}
 	if retries > db.maxRetries {
 		return fmt.Errorf("execution failed after %d retries. the last error was:\n%s", db.maxRetries, err)
@@ -127,6 +163,9 @@ func (db *DBMS) BulkCopy(Data *DataTable, TableName string, BatchSize int, Singl
 	if SingleTransaction {
 		var tx *sql.Tx
 		tx, err = db.conn.BeginTx(db.ctx, nil)
+		if err != nil {
+			return "", nil
+		}
 		defer tx.Rollback()
 		for _, cmd := range cmds {
 			var r sql.Result

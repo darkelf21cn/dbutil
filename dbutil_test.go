@@ -26,6 +26,17 @@ func Test_Query(t *testing.T) {
 		return
 	}
 	dt.Print()
+	err = mssql.Execute("SELECT 1 as col1;")
+	if err != nil {
+		fmt.Printf("filed to run the sql query:\n%s\n", err.Error())
+		return
+	}
+
+	err = mssql.ExecuteBatch([]string{"SELECT 1 as col1;", "SELECT 2 as col2;"}, true)
+	if err != nil {
+		fmt.Printf("filed to run the sql query:\n%s\n", err.Error())
+		return
+	}
 
 	//MySQL
 	insMysql := NewMySQL("10.215.70.141", 3306, "nova", "kwang", "k!m!w@ngAP", "interpolateParams=true", "parseTime=true")
@@ -43,6 +54,18 @@ func Test_Query(t *testing.T) {
 		return
 	}
 	dt.Print()
+
+	err = mysql.Execute("SELECT 1 as col1;")
+	if err != nil {
+		fmt.Printf("filed to run the sql query:\n%s\n", err.Error())
+		return
+	}
+
+	err = mysql.ExecuteBatch([]string{"SELECT 1 as col1;", "SELECT 2 as col2;"}, true)
+	if err != nil {
+		fmt.Printf("filed to run the sql query:\n%s\n", err.Error())
+		return
+	}
 }
 
 func Test_BlukCopy(t *testing.T) {
