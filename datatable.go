@@ -59,6 +59,11 @@ func (col *Column) DataLength() int64 {
 	return col.dataLength
 }
 
+//DecimalPrecision returns the decimal length part of decimal type column.
+func (col *Column) DecimalPrecision() int64 {
+	return col.decimalPrecision
+}
+
 //Nullable indicates whether the column can contain null value.
 func (col *Column) Nullable() bool {
 	return col.nullable
@@ -298,8 +303,9 @@ func (dt *DataTable) SetCell(ColumnName string, RowID int, Value sql.RawBytes) (
 func (dt *DataTable) AppendDataTable(NewDataTable *DataTable) (err error) {
 	dt.Lock()
 	defer dt.Unlock()
-	if !reflect.DeepEqual(dt, NewDataTable) {
-		return fmt.Errorf("2 datatables should have the same structure")
+	err = compareSchema(dt, NewDataTable)
+	if err != nil {
+		return fmt.Errorf("unable to merge datatable\n%s", err.Error())
 	}
 	dt.data = append(dt.data, NewDataTable.data...)
 	return nil
@@ -455,4 +461,29 @@ func FillDataTable(Rows *sql.Rows) (*DataTable, error) {
 		rowid++
 	}
 	return dt, nil
+}
+
+func compareSchema(dt1, dt2 *DataTable) (err error) {
+	if dt1.ColumnCounts() != dt2.ColumnCounts() {
+		return fmt.Errorf("mismatch count counts, %d vs %d", dt1.ColumnCounts(), dt2.ColumnCounts())
+	}
+	for i, col1 := range dt1.columns {
+		col2 := dt2.columns[i]
+		if col1.Name() != col2.Name() {
+			return fmt.Errorf("mismatch column name, %s vs %s", col1.Name(), col2.Name())
+		}
+		if col1.DataType() != col2.DataType() {
+			return fmt.Errorf("column: %s does not have same data type, %s vs %s", col1.Name(), col1.DataType(), col2.DataType())
+		}
+		if col1.DataLength() != col2.DataLength() {
+			return fmt.Errorf("column: %s does not have same data length, %d vs %d", col1.Name(), col1.DataLength(), col2.DataLength())
+		}
+		if col1.DecimalPrecision() != col2.DecimalPrecision() {
+			return fmt.Errorf("column: %s does not have same decimal precision, %d vs %d", col1.Name(), col1.DecimalPrecision(), col2.DecimalPrecision())
+		}
+		if col1.Nullable() != col2.Nullable() {
+			return fmt.Errorf("column: %s does not have same nullable setting", col1.Name())
+		}
+	}
+	return nil
 }
