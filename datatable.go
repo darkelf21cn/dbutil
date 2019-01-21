@@ -123,18 +123,18 @@ func (dt *DataTable) AddColumn(Column Column) (err error) {
 	//Check duplication
 	colCounts := len(dt.columns)
 	for i := 0; i < colCounts; i++ {
-		if dt.columns[i].Name() == Column.Name() {
-			return fmt.Errorf("duplicate column: %s", Column.Name())
+		if dt.columns[i].name == Column.name {
+			return fmt.Errorf("duplicate column: %s", Column.name)
 		}
 	}
 
 	//Add column and set default value.
 	dt.columns = append(dt.columns, Column)
 	var v interface{}
-	if Column.Nullable() {
+	if Column.nullable {
 		v = nil
 	} else {
-		switch sql2golang[Column.DataType()] {
+		switch sql2golang[Column.dataType] {
 		case "":
 			v = ""
 		case "bool":
@@ -164,12 +164,12 @@ func (dt *DataTable) AppendRow(Values ...interface{}) (err error) {
 	}
 	for i, v := range Values {
 		//Nullable validation
-		if v == nil && dt.columns[i].Nullable() == false {
-			return fmt.Errorf("column: %s does not allow null", dt.columns[i].Name())
+		if v == nil && dt.columns[i].nullable == false {
+			return fmt.Errorf("column: %s does not allow null", dt.columns[i].name)
 		}
 		//Datatype validation
 		var ok bool
-		switch sql2golang[dt.columns[i].DataType()] {
+		switch sql2golang[dt.columns[i].dataType] {
 		case "":
 			_, ok = v.(string)
 		case "bool":
@@ -201,7 +201,7 @@ func (dt *DataTable) AppendRowFromString(Values ...string) (err error) {
 		if v == "NULL" {
 			row = append(row, nil)
 		} else {
-			t := sql2golang[dt.columns[i].DataType()]
+			t := sql2golang[dt.columns[i].dataType]
 			switch t {
 			case "":
 				row = append(row, v)
@@ -287,7 +287,7 @@ func (dt *DataTable) SetCell(ColumnName string, RowID int, Value sql.RawBytes) (
 	if RowID < 0 || RowID >= len(dt.data) {
 		return fmt.Errorf("given row number: %d does not exist in the data table", RowID)
 	}
-	expectedType, mapped := sql2golang[dt.columns[i].DataType()]
+	expectedType, mapped := sql2golang[dt.columns[i].dataType]
 	if !mapped {
 		expectedType = "string"
 	}
@@ -316,7 +316,7 @@ func (dt *DataTable) Print() {
 	dt.RLock()
 	defer dt.RUnlock()
 	for _, col := range dt.columns {
-		fmt.Printf("%s\t", col.Name())
+		fmt.Printf("%s\t", col.name)
 	}
 	fmt.Println()
 	for _, row := range dt.data {
@@ -346,7 +346,7 @@ func (dt *DataTable) GenerateInsertCommands(TableName string, BatchSize int) (co
 	//Generate header
 	cmdHeader := fmt.Sprintf("INSERT INTO %s (", TableName)
 	for _, col := range dt.columns {
-		cmdHeader += fmt.Sprintf("%s,", col.Name())
+		cmdHeader += fmt.Sprintf("%s,", col.name)
 	}
 	cmdHeader = strings.TrimRight(cmdHeader, ",")
 	cmdHeader = fmt.Sprintf("%s) VALUES\n", cmdHeader)
@@ -399,7 +399,7 @@ func (dt *DataTable) GenerateInsertCommands(TableName string, BatchSize int) (co
 func (dt *DataTable) flushColumnIndex() {
 	colIndex := make(map[string]int, 0)
 	for i, col := range dt.columns {
-		colIndex[col.Name()] = i
+		colIndex[col.name] = i
 	}
 	dt.colIndex = colIndex
 }
