@@ -464,25 +464,25 @@ func FillDataTable(Rows *sql.Rows) (*DataTable, error) {
 }
 
 func compareSchema(dt1, dt2 *DataTable) (err error) {
-	if dt1.ColumnCounts() != dt2.ColumnCounts() {
-		return fmt.Errorf("mismatch count counts, %d vs %d", dt1.ColumnCounts(), dt2.ColumnCounts())
+	if len(dt1.columns) != len(dt2.columns) {
+		return fmt.Errorf("mismatch count counts, %d vs %d", len(dt1.columns), len(dt2.columns))
 	}
 	for i, col1 := range dt1.columns {
 		col2 := dt2.columns[i]
-		if col1.Name() != col2.Name() {
-			return fmt.Errorf("mismatch column name, %s vs %s", col1.Name(), col2.Name())
+		if col1.name != col2.name {
+			return fmt.Errorf("mismatch column name, %s vs %s", col1.name, col2.name)
 		}
-		if col1.DataType() != col2.DataType() {
-			return fmt.Errorf("column: %s does not have same data type, %s vs %s", col1.Name(), col1.DataType(), col2.DataType())
+		if col1.dataType != col2.dataType {
+			return fmt.Errorf("column: %s does not have same data type, %s vs %s", col1.name, col1.dataType, col2.dataType)
 		}
-		if col1.DataLength() != col2.DataLength() {
-			return fmt.Errorf("column: %s does not have same data length, %d vs %d", col1.Name(), col1.DataLength(), col2.DataLength())
+		if col1.dataLength != col2.dataLength {
+			return fmt.Errorf("column: %s does not have same data length, %d vs %d", col1.name, col1.dataLength, col2.dataLength)
 		}
-		if col1.DecimalPrecision() != col2.DecimalPrecision() {
-			return fmt.Errorf("column: %s does not have same decimal precision, %d vs %d", col1.Name(), col1.DecimalPrecision(), col2.DecimalPrecision())
+		if col1.decimalPrecision != col2.decimalPrecision {
+			return fmt.Errorf("column: %s does not have same decimal precision, %d vs %d", col1.name, col1.decimalPrecision, col2.decimalPrecision)
 		}
-		if col1.Nullable() != col2.Nullable() {
-			return fmt.Errorf("column: %s does not have same nullable setting", col1.Name())
+		if col1.nullable != col2.nullable {
+			return fmt.Errorf("column: %s does not have same nullable setting", col1.name)
 		}
 	}
 	return nil
