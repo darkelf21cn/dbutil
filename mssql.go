@@ -10,11 +10,13 @@ import (
 //MSSQL contains SQL Server connection related properties.
 type MSSQL struct {
 	connstr string
+	addr    string
 }
 
 //NewMSSQL initializes a new instance of SQL Server connection.
 func NewMSSQL(InstanceName, Database, UserName, Password, AppName string) (db *MSSQL) {
 	db = new(MSSQL)
+	db.addr = InstanceName
 	db.connstr = fmt.Sprintf("server=%s;database=%s;user id=%s;password=%s;app name=%s;", InstanceName, Database, UserName, Password, AppName)
 	return db
 }
@@ -22,4 +24,9 @@ func NewMSSQL(InstanceName, Database, UserName, Password, AppName string) (db *M
 //Open opens a connection to the SQL Server.
 func (db *MSSQL) open() (conn *sql.DB, err error) {
 	return sql.Open("mssql", db.connstr)
+}
+
+//address returns the address of mssql instance
+func (db *MSSQL) address() string {
+	return db.addr
 }

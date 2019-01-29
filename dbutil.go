@@ -10,6 +10,7 @@ import (
 //DBInstance is an interface used for opening different databases
 type DBInstance interface {
 	open() (*sql.DB, error)
+	address() string
 }
 
 //DBMS is the abstraction struct of different database drivers.
@@ -34,14 +35,17 @@ func NewDBMS(Ctx context.Context, RetryIntervalSec, MaxRetries int, DBInstance D
 //Open invokes the open function in interface.
 func (db *DBMS) Open() (err error) {
 	db.conn, err = db.dbInstance.open()
-	return err
+	if err != nil {
+		return fmt.Errorf("unable to open the connection to %s\n%s", db.dbInstance.address(), err.Error())
+	}
+	return nil
 }
 
 //Close closes the database connection.
 func (db *DBMS) Close() (err error) {
 	err = db.conn.Close()
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to close the connection to %s\n%s", db.dbInstance.address(), err.Error())
 	}
 	return nil
 }
@@ -62,7 +66,7 @@ func (db *DBMS) Execute(SQL string) (err error) {
 		break
 	}
 	if retries > db.maxRetries {
-		return fmt.Errorf("execution failed after %d retries. the last error was:\n%s", db.maxRetries, err)
+		return fmt.Errorf("execution failed on %s after %d retries. the last error was:\n%s", db.dbInstance.address(), db.maxRetries, err)
 	}
 	return nil
 }
@@ -106,7 +110,7 @@ func (db *DBMS) ExecuteBatch(SQLs []string, SingleTransaction bool) (err error) 
 		break
 	}
 	if retries > db.maxRetries {
-		return fmt.Errorf("execution failed after %d retries. the last error was:\n%s", db.maxRetries, err)
+		return fmt.Errorf("execution failed on %s after %d retries. the last error was:\n%s", db.dbInstance.address(), db.maxRetries, err)
 	}
 	return nil
 }
@@ -182,7 +186,7 @@ func (db *DBMS) BulkCopy(Data *DataTable, TableName string, BatchSize int, Singl
 			var r sql.Result
 			r, err = db.conn.ExecContext(db.ctx, cmd)
 			if err != nil {
-				return fmt.Sprintf("bulk copy failed, %d rows copied without rollback\n", rowsInserted), err
+				return fmt.Sprintf("bulk copy failed, %d rows copied to %s without rollback\n", rowsInserted, TableName), err
 			}
 			ra, _ := r.RowsAffected()
 			rowsInserted += ra
@@ -195,5 +199,5 @@ func (db *DBMS) BulkCopy(Data *DataTable, TableName string, BatchSize int, Singl
 	} else {
 		copyRate = rowsInserted / duration
 	}
-	return fmt.Sprintf("%d rows copied at %d rows/sec\n", rowsInserted, copyRate), nil
+	return fmt.Sprintf("bulk copy completed. %d rows transfered into %s. transfer rate is %d rows/sec\n", rowsInserted, TableName, copyRate), nil
 }
