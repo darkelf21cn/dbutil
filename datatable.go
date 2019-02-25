@@ -1,6 +1,7 @@
 package dbutil
 
 import (
+	"bytes"
 	"database/sql"
 	"fmt"
 	"reflect"
@@ -333,7 +334,7 @@ func (dt *DataTable) Print() {
 }
 
 //GenerateInsertCommands converts the data table into batched sql insert commands
-func (dt *DataTable) GenerateInsertCommands(TableName string, BatchSize int) (commands []string, err error) {
+func (dt *DataTable) GenerateInsertCommands(TableName string, BatchSize int) (cmds []string, err error) {
 	if BatchSize <= 0 {
 		return nil, fmt.Errorf("invalid batch size number")
 	}
@@ -342,56 +343,71 @@ func (dt *DataTable) GenerateInsertCommands(TableName string, BatchSize int) (co
 	dt.RLock()
 	defer dt.RUnlock()
 
-	cmds := make([]string, 0)
-	//Generate header
-	cmdHeader := fmt.Sprintf("INSERT INTO %s (", TableName)
-	for _, col := range dt.columns {
-		cmdHeader += fmt.Sprintf("%s,", col.name)
+	var cols int
+	if len(dt.data) == 0 {
+		return cmds, fmt.Errorf("empty datatable")
+	} else {
+		cols = len(dt.data[0])
 	}
-	cmdHeader = strings.TrimRight(cmdHeader, ",")
-	cmdHeader = fmt.Sprintf("%s) VALUES\n", cmdHeader)
+
+	//Generate header
+	var buffer bytes.Buffer
+	buffer.WriteString(fmt.Sprintf("INSERT INTO %s (", TableName))
+	for i := 0; i < len(dt.columns); i++ {
+		buffer.WriteString(dt.columns[i].name)
+		if i < len(dt.columns)-1 {
+			buffer.WriteString(",")
+		}
+	}
+	buffer.WriteString(") VALUES\n")
+	cmdHeader := buffer.String()
 
 	//Generate values
-	var cmd string
-	var curSize int
-	for _, row := range dt.data {
-		cmd += "("
-		for _, cell := range row {
-			if cell == nil {
-				cmd += "NULL, "
-			}
-			switch cell.(type) {
-			case string:
-				cmd += fmt.Sprintf("'%s', ", strings.Replace(cell.(string), "'", "''", -1))
-			case int64:
-				cmd += fmt.Sprintf("%d, ", cell)
-			case float64:
-				cmd += fmt.Sprintf("%f, ", cell)
-			case bool:
-				if cell.(bool) {
-					cmd += fmt.Sprintf("%d, ", 1)
-				} else {
-					cmd += fmt.Sprintf("%d, ", 0)
+	var rows int
+	for i := 0; i < len(dt.data); i++ {
+		buffer.WriteString("(")
+		for j := 0; j < cols; j++ {
+			if dt.data[i][j] == nil {
+				buffer.WriteString("NULL")
+			} else {
+				switch dt.data[i][j].(type) {
+				case string:
+					buffer.WriteString(fmt.Sprintf("'%s'", strings.Replace(dt.data[i][j].(string), "'", "''", -1)))
+				case int64:
+					buffer.WriteString(strconv.FormatInt(dt.data[i][j].(int64), 10))
+				case float64:
+					buffer.WriteString(strconv.FormatFloat(dt.data[i][j].(float64), 'f', -1, 64))
+				case bool:
+					if dt.data[i][j].(bool) {
+						buffer.WriteString("1")
+					} else {
+						buffer.WriteString("0")
+					}
+				case time.Time:
+					buffer.WriteString(fmt.Sprintf("'%s'", dt.data[i][j].(time.Time).Format(timeLayout)))
 				}
-			case time.Time:
-				cmd += fmt.Sprintf("'%s', ", cell.(time.Time).Format(timeLayout))
+			}
+			if j < len(dt.columns)-1 {
+				//the cell does not belong to last column, add comma as column separator
+				buffer.WriteString(",")
+			} else {
+				buffer.WriteString(")")
 			}
 		}
-		cmd = strings.TrimRight(cmd, ", ")
-		cmd += "),\n"
-		curSize++
-		if curSize >= BatchSize {
-			cmd = strings.TrimRight(cmd, ",\n")
-			cmd = fmt.Sprintf("%s%s;", cmdHeader, cmd)
-			cmds = append(cmds, cmd)
-			cmd = ""
-			curSize = 0
+		rows++
+		if i < len(dt.data)-1 && rows < BatchSize {
+			//add comma as row separator if meets the conditions below
+			// 1) row is not the last row of datatable
+			// 2) current rows in the insert command has not exceeded the BatchSize
+			buffer.WriteString(",\n")
+		} else {
+			//package the batch commands
+			buffer.WriteString(";\n")
+			cmds = append(cmds, buffer.String())
+			buffer.Reset()
+			buffer.WriteString(cmdHeader)
+			rows = 0
 		}
-	}
-	if cmd != "" {
-		cmd = strings.TrimRight(cmd, ",\n")
-		cmd = fmt.Sprintf("%s%s;", cmdHeader, cmd)
-		cmds = append(cmds, cmd)
 	}
 	return cmds, nil
 }
