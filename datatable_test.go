@@ -52,3 +52,28 @@ func Test_AppendDataTable(t *testing.T) {
 	close(queue)
 	wg.Wait()
 }
+
+func Test_DataTableDiff(t *testing.T) {
+	dt := NewDataTable()
+	dt.AddColumn(*NewColumn("key1", "VARCHAR", 10, 0, false))
+	dt.AddColumn(*NewColumn("key2", "INT", 0, 0, false))
+	dt.AddColumn(*NewColumn("v_time", "DATETIME", 10, 0, false))
+	dt.AddColumn(*NewColumn("v_bigint", "BIGINT", 10, 0, false))
+	dt.AddColumn(*NewColumn("v_float", "FLOAT", 0, 0, false))
+	dt.AddColumn(*NewColumn("v_string", "VARCHAR", 10, 0, false))
+	base, err := dt.Clone()
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	dt.AppendRowFromString("svr01", "3306", "2019-01-01 00:00:00", "100", "100.01", "ABC")
+	dt.AppendRowFromString("svr01", "3306", "2019-01-01 00:01:00", "111", "101.02", "DEF")
+	dt.AppendRowFromString("svr01", "3307", "2019-01-01 00:02:00", "102", "100.03", "EFG")
+	dt.AppendRowFromString("svr02", "3306", "2019-01-01 00:03:00", "103", "100.04", "FGH")
+	base.AppendRowFromString("svr01", "3306", "2019-01-01 00:00:30", "105", "100.11", "ZZZ")
+	base.AppendRowFromString("svr02", "3306", "2019-01-01 00:03:00", "103", "100.04", "DDD")
+	result, err := dt.Diff(base, 2)
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	result.Print()
+}

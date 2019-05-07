@@ -334,8 +334,8 @@ func (dt *DataTable) Print() {
 }
 
 //GenerateInsertCommands converts the data table into batched sql insert commands
-func (dt *DataTable) GenerateInsertCommands(TableName string, BatchSize int) (cmds []string, err error) {
-	if BatchSize <= 0 {
+func (dt *DataTable) GenerateInsertCommands(TableName string, BatchSize int, TruncateBeforeInsert bool) (cmds []string, err error) {
+	if BatchSize <= -1 {
 		return nil, fmt.Errorf("invalid batch size number")
 	}
 
@@ -348,6 +348,12 @@ func (dt *DataTable) GenerateInsertCommands(TableName string, BatchSize int) (cm
 		return cmds, fmt.Errorf("empty datatable")
 	} else {
 		cols = len(dt.data[0])
+	}
+
+	//Generate truncate command if the TruncateBeforeInsert flag is set
+	if TruncateBeforeInsert {
+		truncateCmd := fmt.Sprintf("TRUNCATE TABLE %s;", TableName)
+		cmds = append(cmds, truncateCmd)
 	}
 
 	//Generate header
@@ -395,7 +401,7 @@ func (dt *DataTable) GenerateInsertCommands(TableName string, BatchSize int) (cm
 			}
 		}
 		rows++
-		if i < len(dt.data)-1 && rows < BatchSize {
+		if i < len(dt.data)-1 && (rows < BatchSize || BatchSize == 0) {
 			//add comma as row separator if meets the conditions below
 			// 1) row is not the last row of datatable
 			// 2) current rows in the insert command has not exceeded the BatchSize
@@ -477,6 +483,78 @@ func FillDataTable(Rows *sql.Rows) (*DataTable, error) {
 		rowid++
 	}
 	return dt, nil
+}
+
+//Diff joins the data table with given base table by join keys. Return new datatable with difference. Notice that it only can proceed numeric or time type data.
+//Base is the baseline data table.
+//JoinKeys is the first x of columns which will be used for join.
+func (dt *DataTable) Diff(Base *DataTable, JoinKeys int) (result *DataTable, err error) {
+	err = compareSchema(Base, dt)
+	if err != nil {
+		return
+	}
+	if JoinKeys <= 0 || JoinKeys >= dt.ColumnCounts() {
+		return nil, fmt.Errorf("invalid join keys")
+	}
+
+	result, err = dt.Clone()
+	if err != nil {
+		return nil, err
+	}
+	col := NewColumn("_duration_sec", "BIGINT", 0, 0, true)
+	result.AddColumn(*col)
+
+	//nested loops
+	for i := 0; i < Base.RowCounts(); i++ {
+		for j := 0; j < dt.RowCounts(); j++ {
+			matched := true
+			for k := 0; k < JoinKeys; k++ {
+				if Base.data[i][k] != dt.data[j][k] {
+					matched = false
+					break
+				}
+			}
+			if matched {
+				row := make([]interface{}, 0)
+				var duration int64
+				for k := 0; k < dt.ColumnCounts(); k++ {
+					if k < JoinKeys {
+						row = append(row, dt.data[j][k])
+					} else {
+						switch sql2golang[dt.columns[k].dataType] {
+						case "int64":
+							row = append(row, dt.data[j][k].(int64)-Base.data[i][k].(int64))
+						case "float64":
+							row = append(row, dt.data[j][k].(float64)-Base.data[i][k].(float64))
+						case "time.Time":
+							duration = int64(dt.data[j][k].(time.Time).Sub(Base.data[i][k].(time.Time)).Seconds())
+							row = append(row, dt.data[j][k].(time.Time))
+						default:
+							row = append(row, dt.data[j][k])
+						}
+					}
+				}
+				row = append(row, duration)
+				err = result.AppendRow(row...)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+	return result, nil
+}
+
+//Clone replicates the table schema with no data
+func (dt *DataTable) Clone() (result *DataTable, err error) {
+	result = NewDataTable()
+	for _, col := range dt.columns {
+		err = result.AddColumn(col)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return result, nil
 }
 
 func compareSchema(dt1, dt2 *DataTable) (err error) {
