@@ -71,7 +71,7 @@ func Test_DataTableDiff(t *testing.T) {
 	dt.AppendRowFromString("svr02", "3306", "2019-01-01 00:03:00", "103", "100.04", "FGH")
 	base.AppendRowFromString("svr01", "3306", "2019-01-01 00:00:30", "105", "100.11", "ZZZ")
 	base.AppendRowFromString("svr02", "3306", "2019-01-01 00:03:00", "103", "100.04", "DDD")
-	result, err := dt.Diff(base, 2)
+	result, err := dt.Diff(base, 2, true)
 	if err != nil {
 		fmt.Println(err.Error())
 	}

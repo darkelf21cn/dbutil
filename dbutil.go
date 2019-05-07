@@ -156,10 +156,10 @@ func (db *DBMS) query(SQL string) (rows *sql.Rows, err error) {
 }
 
 //BulkCopy converts data table into batch of inserts. Then executes the insert commands.
-func (db *DBMS) BulkCopy(Data *DataTable, TableName string, BatchSize int, SingleTransaction bool) (msg string, err error) {
+func (db *DBMS) BulkCopy(Data *DataTable, TableName string, BatchSize int, SingleTransaction, TruncateBeforeInsert bool) (msg string, err error) {
 	rowsInserted := int64(0)
 	var cmds []string
-	cmds, err = Data.GenerateInsertCommands(TableName, BatchSize)
+	cmds, err = Data.GenerateInsertCommands(TableName, BatchSize, TruncateBeforeInsert)
 	if err != nil {
 		return "", err
 	}

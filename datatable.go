@@ -485,10 +485,10 @@ func FillDataTable(Rows *sql.Rows) (*DataTable, error) {
 	return dt, nil
 }
 
-//Diff joins the data table with given base table by join keys. Return new datatable with difference. Notice that it only can proceed numeric or time type data.
+//Diff joins the data table using first x columns as join keys. Return new datatable with difference. Notice that it only can proceed numeric or time type data.
 //Base is the baseline data table.
 //JoinKeys is the first x of columns which will be used for join.
-func (dt *DataTable) Diff(Base *DataTable, JoinKeys int) (result *DataTable, err error) {
+func (dt *DataTable) Diff(Base *DataTable, JoinKeys int, IgnoreNegative bool) (result *DataTable, err error) {
 	err = compareSchema(Base, dt)
 	if err != nil {
 		return
@@ -517,27 +517,44 @@ func (dt *DataTable) Diff(Base *DataTable, JoinKeys int) (result *DataTable, err
 			if matched {
 				row := make([]interface{}, 0)
 				var duration int64
+				validRow := true
 				for k := 0; k < dt.ColumnCounts(); k++ {
 					if k < JoinKeys {
 						row = append(row, dt.data[j][k])
 					} else {
 						switch sql2golang[dt.columns[k].dataType] {
 						case "int64":
-							row = append(row, dt.data[j][k].(int64)-Base.data[i][k].(int64))
+							v := dt.data[j][k].(int64) - Base.data[i][k].(int64)
+							if v < 0 && IgnoreNegative {
+								validRow = false
+								break
+							}
+							row = append(row, v)
 						case "float64":
-							row = append(row, dt.data[j][k].(float64)-Base.data[i][k].(float64))
+							v := dt.data[j][k].(float64) - Base.data[i][k].(float64)
+							if v < 0 && IgnoreNegative {
+								validRow = false
+								break
+							}
+							row = append(row, v)
 						case "time.Time":
 							duration = int64(dt.data[j][k].(time.Time).Sub(Base.data[i][k].(time.Time)).Seconds())
+							if duration < 0 && IgnoreNegative {
+								validRow = false
+								break
+							}
 							row = append(row, dt.data[j][k].(time.Time))
 						default:
 							row = append(row, dt.data[j][k])
 						}
 					}
 				}
-				row = append(row, duration)
-				err = result.AppendRow(row...)
-				if err != nil {
-					return nil, err
+				if validRow {
+					row = append(row, duration)
+					err = result.AppendRow(row...)
+					if err != nil {
+						return nil, err
+					}
 				}
 			}
 		}

@@ -90,12 +90,12 @@ func Test_BlukCopy(t *testing.T) {
 	}
 	defer mysql.Close()
 
-	dt, err = mssql.Query("SELECT TOP 100000 * FROM dbo.mConnectivityHist;")
+	dt, err = mssql.Query("SELECT TOP 1000 * FROM dbo.mConnectivityHist;")
 	if err != nil {
 		fmt.Printf("filed to run the sql query:\n%s\n", err.Error())
 		return
 	}
-	msg, err := mysql.BulkCopy(dt, "TestBcp", 1000, false)
+	msg, err := mysql.BulkCopy(dt, "TestBcp", 0, false, true)
 	if err != nil {
 		fmt.Printf(err.Error())
 		return
